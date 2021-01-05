@@ -11,7 +11,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #define MAX_DIST 1e38
-#define SCALE 1.4
+#define SCALE 2.0
 #define TAU 6.2831853071
 
 float rand( vec2 n )
@@ -45,8 +45,8 @@ float sdCircle( in vec2 p, in vec2 c, float r, in float d)
 float sdGround( in vec2 p, in float d)
 {
     vec2 size = SCALE * iResolution.xy / iResolution.y;
-    vec2 v1 = vec2(size.x, -1.0);
-	vec2 v2 = vec2(-size.x, -1.0);;
+    vec2 v1 = vec2(size.x, -1.5);
+	vec2 v2 = vec2(-size.x, -1.5);;
     float th = 0.01;
     
     return sdSegment(p, v1, v2, th, d);
@@ -75,11 +75,12 @@ const float scaleLeft = 0.8;
 const float scaleRight= 0.99;
 const float scaleThickness = 0.8;
 
+const vec2 vUp = vec2(0,1);
+
 float sdBranch( in vec2 p, vec2 root, int i, in float d) 
 {
     float h = 0.5;
     mat2 mat = mat2(1);
-    vec2 dir = vec2(0., 1.);
     float th = 0.1;
     vec2 v = root;
         
@@ -90,7 +91,7 @@ float sdBranch( in vec2 p, vec2 root, int i, in float d)
         
     for (int j = i; j > 1; j = j / 2) 
     {
-        v = v + mat * dir * h;
+        v = v + mat * vUp * h;
             
         float r = rand(vec2(branch) + root);
             
@@ -112,13 +113,13 @@ float sdBranch( in vec2 p, vec2 root, int i, in float d)
     }
 
 
-    return sdSegment2(p, v, v + mat * dir * h, th, th * scaleThickness, d);
+    return sdSegment2(p, v, v + mat * vUp * h, th, th * scaleThickness, d);
 }
 
-const int depth = 9;
-const int branches = 1 << depth;
+#define DEPTH 9
+const int branches = 1 << DEPTH;
 
-float sdTree( in vec2 p, in vec2 root, in float d)
+float sdTree(in vec2 p, in vec2 root, in float d)
 {
 
     for (int i = 1; i <= branches; i++)
@@ -129,6 +130,62 @@ float sdTree( in vec2 p, in vec2 root, in float d)
     return d;
 }
 
+float sdTree2(in vec2 p, in vec2 root, in float d)
+{
+    
+    float h[DEPTH];
+    mat2 mat[DEPTH];
+    float th[DEPTH];
+    vec2 v[DEPTH];
+    int dd[DEPTH];
+
+    int stack = 1;
+
+    h[0] = 0.5;
+    mat[0] = mat2(1);
+    th[0] = 0.1;
+    v[0] = root;
+    dd[0] = 1;
+
+    while (stack > 0)
+    {
+        // pop entry off stack
+        stack -= 1;
+        mat2 m = mat[stack];
+        float thickness = th[stack];
+        float height = h[stack];
+        int depth = dd[stack];
+
+        // build branch
+        vec2 v1 = v[stack] + m * vUp * height;
+        d = sdSegment2(p, v[stack], v1, thickness, thickness * scaleThickness, d);
+
+        // recurse
+        if (depth < DEPTH)
+        {
+            // left branch
+            v[stack] = v1;
+            mat[stack] = m * rotL;
+            h[stack] = height * scaleLeft;
+            th[stack] = thickness * scaleLeft * scaleThickness;
+            dd[stack] = depth + 1;
+            stack += 1;
+
+            // right branch
+            v[stack] = v1;
+            mat[stack] = m * rotR;
+            h[stack] = height * scaleRight;
+            th[stack] = thickness * scaleRight * scaleThickness;
+            dd[stack] = depth + 1;
+            stack += 1;
+        }
+    }
+    
+    return d;
+}
+
+
+
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
 	vec2 p = (2.0*fragCoord-iResolution.xy)/iResolution.y;
@@ -137,8 +194,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float d = MAX_DIST;
 
     d = sdGround(p, d);
-    d = sdTree(p, vec2(1.2, -1.), d);
-    d = sdTree(p, vec2(-1.2, -1.), d);
+    d = sdTree2(p, vec2(0, -1.5), d);
  
     vec3 col = vec3(1.0) - sign(d)*vec3(0.4,0.7,0.1);
 	col *= 1.0 - exp(-3.0*abs(d));
