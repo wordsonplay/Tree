@@ -64,6 +64,7 @@ mat2 rotate(float a)
     return mat2(cos(a), sin(a), -sin(a), cos(a));
 }
 
+const float pruneProb = 0.01;
 const float angleL = -TAU / 12.;
 const float angleR = TAU / 30.;
 const mat2 rotL = mat2(cos(angleL), sin(angleL), -sin(angleL), cos(angleL));
@@ -76,6 +77,11 @@ const float scaleRight= 0.99;
 const float scaleThickness = 0.8;
 
 const vec2 vUp = vec2(0,1);
+
+#define DEPTH 9
+const int branches = 1 << DEPTH;
+
+
 
 float sdBranch( in vec2 p, vec2 root, int i, in float d) 
 {
@@ -106,7 +112,7 @@ float sdBranch( in vec2 p, vec2 root, int i, in float d)
         depth += 1;
             
         // drop some branches
-        if (abs(r-0.5) < 0.025)
+        if (abs(2. * r - 1.) < pruneProb)
         {
             return d;
         }
@@ -115,9 +121,6 @@ float sdBranch( in vec2 p, vec2 root, int i, in float d)
 
     return sdSegment2(p, v, v + mat * vUp * h, th, th * scaleThickness, d);
 }
-
-#define DEPTH 9
-const int branches = 1 << DEPTH;
 
 float sdTree(in vec2 p, in vec2 root, in float d)
 {
@@ -130,25 +133,31 @@ float sdTree(in vec2 p, in vec2 root, in float d)
     return d;
 }
 
+
+// stack
+
+float h[DEPTH];
+mat2 mat[DEPTH];
+float th[DEPTH];
+vec2 v[DEPTH];
+int dd[DEPTH];
+
 float sdTree2(in vec2 p, in vec2 root, in float d)
 {
-    
-    float h[DEPTH];
-    mat2 mat[DEPTH];
-    float th[DEPTH];
-    vec2 v[DEPTH];
-    int dd[DEPTH];
-
     int stack = 1;
 
-    h[0] = 0.5;
+    h[0] = 0.6;
     mat[0] = mat2(1);
     th[0] = 0.1;
     v[0] = root;
     dd[0] = 1;
 
+    int branch = 0;
+
     while (stack > 0)
     {
+        branch += 1;
+        
         // pop entry off stack
         stack -= 1;
         mat2 m = mat[stack];
@@ -156,28 +165,40 @@ float sdTree2(in vec2 p, in vec2 root, in float d)
         float height = h[stack];
         int depth = dd[stack];
 
-        // build branch
-        vec2 v1 = v[stack] + m * vUp * height;
-        d = sdSegment2(p, v[stack], v1, thickness, thickness * scaleThickness, d);
-
-        // recurse
-        if (depth < DEPTH)
+        float rnd = rand(vec2(branch) + root);
+        
+        // drop some branches
+        if (abs(2. * rnd - 1.) > pruneProb) 
         {
-            // left branch
-            v[stack] = v1;
-            mat[stack] = m * rotL;
-            h[stack] = height * scaleLeft;
-            th[stack] = thickness * scaleLeft * scaleThickness;
-            dd[stack] = depth + 1;
-            stack += 1;
+            // flip 50% of the time
+            m = (rnd > 0.5 ? m * flip : m);
+        
+            // build branch
+            vec2 v1 = v[stack] + m * vUp * height;
 
-            // right branch
-            v[stack] = v1;
-            mat[stack] = m * rotR;
-            h[stack] = height * scaleRight;
-            th[stack] = thickness * scaleRight * scaleThickness;
-            dd[stack] = depth + 1;
-            stack += 1;
+                d = sdSegment2(p, v[stack], v1, thickness, thickness * scaleThickness, d);
+
+                // recurse
+                if (depth < DEPTH)
+                {
+                    // left branch
+                    v[stack] = v1;
+                    mat[stack] = m * rotL;
+                    float scale = scaleLeft * mix(scaleLeft, scaleRight, rnd);
+                    h[stack] = height * scale;
+                    th[stack] = thickness * scale * scaleThickness;
+                    dd[stack] = depth + 1;                    
+                    stack += 1;
+
+                    // right branch
+                    v[stack] = v1;
+                    mat[stack] = m * rotR;
+                    scale = scaleRight * mix(scaleLeft, scaleRight, rnd);
+                    h[stack] = height * scale;
+                    th[stack] = thickness * scale * scaleThickness;
+                    dd[stack] = depth + 1;
+                    stack += 1;
+                }
         }
     }
     
@@ -194,7 +215,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float d = MAX_DIST;
 
     d = sdGround(p, d);
-    d = sdTree2(p, vec2(0, -1.5), d);
+    d = sdTree2(p, vec2(-1.2, -1.5), d);
  
     vec3 col = vec3(1.0) - sign(d)*vec3(0.4,0.7,0.1);
 	col *= 1.0 - exp(-3.0*abs(d));
