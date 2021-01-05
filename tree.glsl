@@ -81,11 +81,14 @@ const vec2 vUp = vec2(0,1);
 #define DEPTH 9
 const int branches = 1 << DEPTH;
 
-
+// IMPLEMENTATION 1
+//
+// This version should take O(nlogn) time to draw n branches
+// but it seems faster in real terms
 
 float sdBranch( in vec2 p, vec2 root, int i, in float d) 
 {
-    float h = 0.5;
+    float h = 0.6;
     mat2 mat = mat2(1);
     float th = 0.1;
     vec2 v = root;
@@ -134,7 +137,11 @@ float sdTree(in vec2 p, in vec2 root, in float d)
 }
 
 
-// stack
+// IMPLEMENTATION 2
+//
+// Stack-based implementation
+// This version should take O(n) time to draw n branches
+// but it seems slower in real terms
 
 float h[DEPTH];
 mat2 mat[DEPTH];
@@ -215,7 +222,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float d = MAX_DIST;
 
     d = sdGround(p, d);
-    d = sdTree2(p, vec2(-1.2, -1.5), d);
+    d = sdTree(p, vec2(-1.2, -1.5), d);
+    d = sdTree(p, vec2(1.2, -1.5), d);
  
     vec3 col = vec3(1.0) - sign(d)*vec3(0.4,0.7,0.1);
 	col *= 1.0 - exp(-3.0*abs(d));
